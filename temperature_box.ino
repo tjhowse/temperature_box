@@ -99,18 +99,18 @@ void setup()
 
 void updateCurrentTempDisplay( float temp )
 {
-    sprintf(yellowText[1], "Current: %6.2f C", temp);
+    sprintf(yellowText[1], "Current: %6.1f C    ", temp);
 }
 
 void updateTargetTempDisplay( float temp )
 {
-    sprintf(yellowText[0], "Target: %6.2f C", temp);
+    sprintf(yellowText[0], "Target:  %6.1f C    ", temp);
 }
 
 void updateDutyCycleDisplay(int dutyCycle)
 {
-    sprintf(&yellowText[0][YELLOW_CHAR_N_X-5], "Duty");
-    sprintf(&yellowText[1][YELLOW_CHAR_N_X-5], "%d%", dutyCycle);
+    sprintf(yellowText[0] + YELLOW_CHAR_N_X-5, "Duty");
+    sprintf(yellowText[1] + YELLOW_CHAR_N_X-5, "%3d%%", dutyCycle);
 }
 
 
@@ -137,7 +137,7 @@ void loop()
     myEnc.write(0);
 
     updateTargetTempDisplay(targetTemp);
-    // updateDutyCycleDisplay(100);
+    updateDutyCycleDisplay(100);
     // sprintf(yellowText[0], "Yellow");
     // sprintf(blueText[0], "Blue");
     updateDisplay();
