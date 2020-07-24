@@ -22,7 +22,7 @@
 #include "max6675.h"
 #include <Encoder.h>
 
-#define CURRENT_TEMPERATURE_UPDATE_INTERVAL_MS 1500
+#define CURRENT_TEMPERATURE_UPDATE_INTERVAL_MS 500
 #define PIN_THERMO_D0 12 // D6
 #define PIN_THERMO_CS 16 // D0
 #define PIN_TERMO_CLK 15 // D8
@@ -64,7 +64,7 @@ void updateDisplay()
 
     for (i = 0; i < YELLOW_CHAR_N_Y; i++)
     {
-        oled.setTextXY(0, i)
+        oled.setTextXY(i, 0);
         oled.putString(yellowText[i]);
     }
 
@@ -72,7 +72,7 @@ void updateDisplay()
     oled.setFont(font8x8);
     for (i = 0; i < BLUE_CHAR_N_Y; i++)
     {
-        oled.setTextXY(0, i+2)
+        oled.setTextXY(i+2, 0);
         oled.putString(blueText[i]);
     }
 
@@ -90,96 +90,56 @@ void setup()
     oled.init();
     oled.setFont(font8x8);
     oled.clearDisplay();
-    oled.setFont(font5x7);
-    for (int i = 0; i < 50; i++)
-    {
-        oled.setTextXY(0,i);
-        sprintf(currentTempDisplayRow, "%d", i);
-        oled.putString(currentTempDisplayRow);
-
-    }
-    oled.setFont(font8x8);
-    for (int i = 0; i < 50; i++)
-    {
-        oled.setTextXY(2,i);
-        sprintf(currentTempDisplayRow, "%d", i);
-        oled.putString(currentTempDisplayRow);
-
-    }
-    return
-    oled.putString("1");
-    oled.putString("Target: ?? degC   Duty");
-    oled.setTextXY(1,0);
-    oled.putString("Current: ?? degC   100%");
-    oled.setFont(font8x8);
-    oled.setTextXY(5,0);
-    oled.putString("Change setpoint");
     targetTemp = 100;
     lastCurrentTemperatureUpdate = 0;
+    // Serial.begin(9600);
+    // delay(100);
+    // Serial.println("Setup done");
 }
 
 void updateCurrentTempDisplay( float temp )
 {
-    // Updates the display with the current temperature
-    oled.setFont(font5x7);
-    delay(OLED_DISPLAY_MS);
-    oled.setTextXY(1,0);
-    delay(OLED_DISPLAY_MS);
-    sprintf(currentTempDisplayRow, "Current: %.2f C", temp);
-    oled.putString(currentTempDisplayRow);
-    delay(OLED_DISPLAY_MS);
-    oled.setFont(font8x8);
-    delay(OLED_DISPLAY_MS);
+    sprintf(yellowText[1], "Current: %6.2f C", temp);
 }
 
 void updateTargetTempDisplay( float temp )
 {
-    // Updates the display with the current target temperature
-    oled.setFont(font5x7);
-    delay(OLED_DISPLAY_MS);
-    oled.setTextXY(0,0);
-    delay(OLED_DISPLAY_MS);
-    sprintf(targetTempDisplayRow, "Target: %.2f C   Duty", temp);
-    oled.putString(targetTempDisplayRow);
-    delay(OLED_DISPLAY_MS);
-    oled.setFont(font8x8);
-    delay(OLED_DISPLAY_MS);
+    sprintf(yellowText[0], "Target: %6.2f C", temp);
 }
+
+void updateDutyCycleDisplay(int dutyCycle)
+{
+    sprintf(&yellowText[0][YELLOW_CHAR_N_X-5], "Duty");
+    sprintf(&yellowText[1][YELLOW_CHAR_N_X-5], "%d%", dutyCycle);
+}
+
 
 void debugMessage(int row, char* message)
 {
-    oled.setFont(font8x8);
-    delay(OLED_DISPLAY_MS);
-    oled.setTextXY(row,0);
-    delay(OLED_DISPLAY_MS);
-    oled.putString(message);
-    delay(OLED_DISPLAY_MS);
+    sprintf(blueText[BLUE_CHAR_N_Y-1], message);
 }
 
 void updateCurrentTemp()
 {
-    // counter1 += 2;
-    // sprintf(debugMessageString, "Smerp %d", counter1);
-    // debugMessage(6, debugMessageString);
-    if ((lastCurrentTemperatureUpdate - millis()) < CURRENT_TEMPERATURE_UPDATE_INTERVAL_MS) return;
+    if ((millis() - lastCurrentTemperatureUpdate) < CURRENT_TEMPERATURE_UPDATE_INTERVAL_MS) return;
     lastCurrentTemperatureUpdate = millis();
-    // sprintf(debugMessageString, "Count %d", ++counter);
-    // debugMessage(7, debugMessageString);
-    delay(OLED_DISPLAY_MS);
-    delay(OLED_DISPLAY_MS);
-    delay(OLED_DISPLAY_MS);
 
     currentTemp = thermocouple.readCelsius();
+    // Serial.println(currentTemp);
     updateCurrentTempDisplay(currentTemp);
 }
 
 void loop()
 {
-    // updateCurrentTemp();
+    updateCurrentTemp();
 
-    // targetTemp += myEnc.read()/2;
-    // myEnc.write(0);
+    targetTemp += myEnc.read()/2;
+    myEnc.write(0);
 
-    // updateTargetTempDisplay(targetTemp);
-    // delay(50);
+    updateTargetTempDisplay(targetTemp);
+    // updateDutyCycleDisplay(100);
+    // sprintf(yellowText[0], "Yellow");
+    // sprintf(blueText[0], "Blue");
+    updateDisplay();
+    delay(50);
 }
