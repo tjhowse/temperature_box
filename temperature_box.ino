@@ -64,6 +64,10 @@ void updateDisplay()
 
     for (i = 0; i < YELLOW_CHAR_N_Y; i++)
     {
+        for (j = 0; j < YELLOW_CHAR_N_X; j++)
+            if (yellowText[i][j] == '\0')
+                yellowText[i][j] = ' ';
+        yellowText[i][YELLOW_CHAR_N_X-1] = '\0';
         oled.setTextXY(i, 0);
         oled.putString(yellowText[i]);
     }
@@ -72,6 +76,10 @@ void updateDisplay()
     oled.setFont(font8x8);
     for (i = 0; i < BLUE_CHAR_N_Y; i++)
     {
+        for (j = 0; j < BLUE_CHAR_N_X; j++)
+            if (blueText[i][j] == '\0')
+                blueText[i][j] = ' ';
+        blueText[i][BLUE_CHAR_N_X-1] = '\0';
         oled.setTextXY(i+2, 0);
         oled.putString(blueText[i]);
     }
@@ -99,12 +107,12 @@ void setup()
 
 void updateCurrentTempDisplay( float temp )
 {
-    sprintf(yellowText[1], "Current: %6.1f C    ", temp);
+    sprintf(yellowText[1], "Current: %6.1f C", temp);
 }
 
 void updateTargetTempDisplay( float temp )
 {
-    sprintf(yellowText[0], "Target:  %6.1f C    ", temp);
+    sprintf(yellowText[0], "Target:  %6.1f C", temp);
 }
 
 void updateDutyCycleDisplay(int dutyCycle)
@@ -138,8 +146,6 @@ void loop()
 
     updateTargetTempDisplay(targetTemp);
     updateDutyCycleDisplay(100);
-    // sprintf(yellowText[0], "Yellow");
-    // sprintf(blueText[0], "Blue");
     updateDisplay();
     delay(50);
 }
