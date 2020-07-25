@@ -51,20 +51,28 @@ int counter1 = 0;
 int i, j;
 
 // Framebuffers
-char yellowText[YELLOW_CHAR_N_Y][YELLOW_CHAR_N_X];
-char blueText[BLUE_CHAR_N_Y][BLUE_CHAR_N_X];
+// +1 to allow for sprintf to write the null terminator beyond the printable area
+char yellowText[YELLOW_CHAR_N_Y][YELLOW_CHAR_N_X+1];
+char blueText[BLUE_CHAR_N_Y][BLUE_CHAR_N_X+1];
 
 // https://playground.arduino.cc/Code/PIDLibrary/
 double pidInput, pidOutput, pidSetpoint;
 
-double pidP = 2;
+// double pidP = 2;
+double pidP = 100;
 double pidI = 5;
 double pidD = 1;
 
 PID myPID(&pidInput, &pidOutput, &pidSetpoint, pidP, pidI, pidD, DIRECT);
 
+#define MENU_MODES_N 4
+#define MENU_MODE_SETPOINT 0
+#define MENU_MODE_TUNE_P 1
+#define MENU_MODE_TUNE_I 2
+#define MENU_MODE_TUNE_D 3
+
 // Menu management
-char menuModes[4][BLUE_CHAR_N_X];
+char menuModes[MENU_MODES_N][BLUE_CHAR_N_X];
 unsigned int menuMode = 0;
 volatile bool btnA_falling = false;
 
@@ -122,11 +130,12 @@ void setup()
     myPID.SetMode(AUTOMATIC);
     myPID.SetOutputLimits(0, relayCycle_ms);
 
-    sprintf(menuModes[0], "Adjust target");
-    sprintf(menuModes[1], "Borpus");
-    sprintf(menuModes[2], "Gorpus");
+    sprintf(menuModes[0], " Adjust target ");
+    sprintf(menuModes[MENU_MODE_TUNE_P], "    Tune P     ");
+    sprintf(menuModes[MENU_MODE_TUNE_I], "    Tune I     ");
+    sprintf(menuModes[MENU_MODE_TUNE_D], "    Tune D     ");
 
-    attachInterrupt(digitalPinToInterrupt(PIN_BTN_A), ISR_btnA, FALLING)
+    attachInterrupt(digitalPinToInterrupt(PIN_BTN_A), ISR_btnA, FALLING);
 }
 
 void updateCurrentTempDisplay( float temp )
@@ -136,11 +145,12 @@ void updateCurrentTempDisplay( float temp )
 
 void updateTargetTemp()
 {
+    if (menuMode != MENU_MODE_SETPOINT) return;
     counter = myEnc.read()/2;
+    myEnc.write(0);
     if (counter != 0)
     {
         targetTemp += (counter/abs(counter))*pow(counter, 2);
-        myEnc.write(0);
     }
     updateTargetTempDisplay();
 }
@@ -194,8 +204,61 @@ void updateRelayState()
     digitalWrite(PIN_RELAY, !relayState);
 }
 
+void updateMenuDisplay()
+{
+    sprintf(blueText[0], menuModes[menuMode]);
+    if ((menuMode == MENU_MODE_TUNE_P) ||
+        (menuMode == MENU_MODE_TUNE_I) ||
+        (menuMode == MENU_MODE_TUNE_D))
+    {
+        counter = myEnc.read()/2;
+        myEnc.write(0);
+
+        switch (menuMode)
+        {
+            case MENU_MODE_TUNE_P:
+                if (counter != 0) pidP += (counter/abs(counter))*pow(counter, 2)*0.1;
+                sprintf(blueText[2], "  -");
+                sprintf(blueText[3], "   ");
+                sprintf(blueText[4], "   ");
+                break;
+            case MENU_MODE_TUNE_I:
+                if (counter != 0) pidI += (counter/abs(counter))*pow(counter, 2)*0.1;
+                sprintf(blueText[2], "   ");
+                sprintf(blueText[3], "  -");
+                sprintf(blueText[4], "   ");
+                break;
+            case MENU_MODE_TUNE_D:
+                if (counter != 0) pidD += (counter/abs(counter))*pow(counter, 2)*0.1;
+                sprintf(blueText[2], "   ");
+                sprintf(blueText[3], "   ");
+                sprintf(blueText[4], "  -");
+                break;
+        }
+        myPID.SetTunings(pidP, pidI, pidD);
+        sprintf(blueText[2]+4, "P: %.2f    ", pidP);
+        sprintf(blueText[3]+4, "I: %.2f    ", pidI);
+        sprintf(blueText[4]+4, "D: %.2f    ", pidD);
+    } else {
+        sprintf(blueText[2], "                ");
+        sprintf(blueText[3], "                ");
+        sprintf(blueText[4], "                ");
+    }
+}
+
+void updateMenu()
+{
+    if (btnA_falling)
+    {
+        btnA_falling = false;
+        menuMode = (menuMode + 1)%MENU_MODES_N;
+    }
+    updateMenuDisplay();
+}
+
 void loop()
 {
+    updateMenu();
     updateCurrentTemp();
     updateTargetTemp();
     updatePIDLoop();
