@@ -1,29 +1,20 @@
-/*
-  06/01/2016
-  Author: Makerbro
-  Platforms: ESP8266
-  Language: C++
-  File: HelloOLED.ino
-  ------------------------------------------------------------------------
-  Description:
-  Demo for OLED display showcasing writing text to the screen.
-  ------------------------------------------------------------------------
-  Please consider buying products from ACROBOTIC to help fund future
-  Open-Source projects like this! We'll always put our best effort in every
-  project, and release all our design files and code for you to use.
-  https://acrobotic.com/
-  ------------------------------------------------------------------------
-  License:
-  Released under the MIT license. Please check LICENSE.txt for more
-  information.  All text above must be included in any redistribution.
-*/
+// For the OLED interface
 #include <Wire.h>
 #include <ACROBOTIC_SSD1306.h>
+
+// For the thermocouple
 #include "max6675.h"
+
+// For the rotary encoder
 #include <Encoder.h>
+
+// For the PID loop
 #include <PID_v1.h>
 
+// Constants
 #define CURRENT_TEMPERATURE_UPDATE_INTERVAL_MS 500
+
+// Pin assignments
 #define PIN_THERMO_D0 12 // D6
 #define PIN_THERMO_CS 16 // D0
 #define PIN_TERMO_CLK 15 // D8
@@ -32,8 +23,7 @@
 #define PIN_BTN_A 0 // D3
 #define PIN_RELAY 2 // D4 LED
 
-#define OLED_DISPLAY_MS 5
-
+// Screen characteristics
 #define PX_X 128
 #define PX_Y 64
 #define YELLOW_CHAR_N_X 25
@@ -41,15 +31,13 @@
 #define BLUE_CHAR_N_X 16
 #define BLUE_CHAR_N_Y 6
 
-#define RELAY_CYCLE_MS 3000
-
 MAX6675 thermocouple(PIN_TERMO_CLK, PIN_THERMO_CS, PIN_THERMO_D0);
 Encoder myEnc(PIN_ENC_A, PIN_ENC_B);
 
+unsigned int relayCycle_ms = 3000;
 float currentTemp;
 float targetTemp;
-float dutyCycle; // The proportion of time the relay is on. 0.0 to 1.0
-int onPeriod_ms; // dutyCycle * RELAY_CYCLE_MS
+float dutyCycle_ms; // The amount of time the relay is on during a cycle. 0 to relayCycle_ms
 bool relayState; // 0 - Open circuit, 1 - Closed circuit
 
 // Times
@@ -60,17 +48,25 @@ unsigned long now = 0;
 // Misc
 int counter = 0;
 int counter1 = 0;
+int i, j;
 
 // Framebuffers
 char yellowText[YELLOW_CHAR_N_Y][YELLOW_CHAR_N_X];
 char blueText[BLUE_CHAR_N_Y][BLUE_CHAR_N_X];
-int i, j;
 
 // https://playground.arduino.cc/Code/PIDLibrary/
 double pidInput, pidOutput, pidSetpoint;
-double pidP, pidI, pidD;
 
-PID myPID(&pidInput, &pidOutput, &pidSetpoint, 2, 5, 1, DIRECT);
+double pidP = 2;
+double pidI = 5;
+double pidD = 1;
+
+PID myPID(&pidInput, &pidOutput, &pidSetpoint, pidP, pidI, pidD, DIRECT);
+
+// Menu management
+char menuModes[4][BLUE_CHAR_N_X];
+unsigned int menuMode = 0;
+volatile bool btnA_falling = false;
 
 void updateDisplay()
 {
@@ -99,7 +95,10 @@ void updateDisplay()
         oled.setTextXY(i+2, 0);
         oled.putString(blueText[i]);
     }
+}
 
+void ISR_btnA() {
+  btnA_falling = true;
 }
 
 void setup()
@@ -121,14 +120,20 @@ void setup()
     // delay(100);
     // Serial.println("Setup done");
     myPID.SetMode(AUTOMATIC);
-    myPID.SetOutputLimits(0, RELAY_CYCLE_MS);
+    myPID.SetOutputLimits(0, relayCycle_ms);
 
+    sprintf(menuModes[0], "Adjust target");
+    sprintf(menuModes[1], "Borpus");
+    sprintf(menuModes[2], "Gorpus");
+
+    attachInterrupt(digitalPinToInterrupt(PIN_BTN_A), ISR_btnA, FALLING)
 }
 
 void updateCurrentTempDisplay( float temp )
 {
     sprintf(yellowText[1], "Current: %6.1f C", temp);
 }
+
 void updateTargetTemp()
 {
     counter = myEnc.read()/2;
@@ -145,7 +150,7 @@ void updateTargetTempDisplay()
     sprintf(yellowText[0], "Target:  %6.1f C", targetTemp);
 }
 
-void updateDutyCycleDisplay(int dutyPercent)
+void updatedutyCycle_msDisplay(int dutyPercent)
 {
     sprintf(yellowText[0] + YELLOW_CHAR_N_X-5, "Duty");
     sprintf(yellowText[1] + YELLOW_CHAR_N_X-5, "%3d%%", dutyPercent);
@@ -171,22 +176,21 @@ void updatePIDLoop()
     pidInput = currentTemp;
     pidSetpoint = targetTemp;
     myPID.Compute();
-    dutyCycle = pidOutput;
+    dutyCycle_ms = pidOutput;
 }
 
 void updateRelayState()
 {
     now = millis();
-    if ((now-lastRelayCycleTime) >= RELAY_CYCLE_MS)
+    if ((now-lastRelayCycleTime) >= relayCycle_ms)
     {
         lastRelayCycleTime = now;
         // This is correcter, but dangerouser
-        // lastRelayCycleTime += RELAY_CYCLE_MS;
+        // lastRelayCycleTime += relayCycle_ms;
     }
-    onPeriod_ms = dutyCycle;
-    // If we're in the first part of the cycle, I.E. between 0 and onPeriod_ms after lastRelayCycleTime,
+    // If we're in the first part of the cycle, I.E. between 0 and dutyCycle_ms after lastRelayCycleTime,
     // the relay should be on. Otherwise: off.
-    relayState = ((now-lastRelayCycleTime) < onPeriod_ms);
+    relayState = ((now-lastRelayCycleTime) < dutyCycle_ms);
     digitalWrite(PIN_RELAY, !relayState);
 }
 
@@ -196,7 +200,7 @@ void loop()
     updateTargetTemp();
     updatePIDLoop();
     updateRelayState();
-    updateDutyCycleDisplay((dutyCycle/RELAY_CYCLE_MS)*100);
+    updatedutyCycle_msDisplay((dutyCycle_ms/relayCycle_ms)*100);
     updateDisplay();
     delay(50);
 }
