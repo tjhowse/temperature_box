@@ -31,6 +31,13 @@
 #define BLUE_CHAR_N_X 16
 #define BLUE_CHAR_N_Y 6
 
+#define GRAPH_PX_X 5
+#define GRAPH_PX_Y 5
+
+#define EEPROM_PID_P 0
+#define EEPROM_PID_I 8
+#define EEPROM_PID_D 16
+
 MAX6675 thermocouple(PIN_TERMO_CLK, PIN_THERMO_CS, PIN_THERMO_D0);
 Encoder myEnc(PIN_ENC_A, PIN_ENC_B);
 
@@ -76,6 +83,8 @@ char menuModes[MENU_MODES_N][BLUE_CHAR_N_X];
 unsigned int menuMode = 0;
 volatile bool btnA_falling = false;
 
+static unsigned char graph[GRAPH_PX_Y][GRAPH_PX_X];
+
 void updateDisplay()
 {
     // Update the yellow rows
@@ -103,6 +112,13 @@ void updateDisplay()
         oled.setTextXY(i+2, 0);
         oled.putString(blueText[i]);
     }
+
+    // // Print the graph
+    // if (menuMode == MENU_MODE_SETPOINT)
+    // {
+    //     oled.setTextXY(7, 0);
+    //     oled.drawBitmap(graph[0], GRAPH_PX_X*GRAPH_PX_Y);   // 1024 pixels for logo
+    // }
 }
 
 void ISR_btnA() {
@@ -136,6 +152,22 @@ void setup()
     sprintf(menuModes[MENU_MODE_TUNE_D], "    Tune D     ");
 
     attachInterrupt(digitalPinToInterrupt(PIN_BTN_A), ISR_btnA, FALLING);
+    for (i = 0; i < GRAPH_PX_X; i++)
+        for (j = 0; j < GRAPH_PX_Y; j++)
+            graph[j][i] = 0xff;
+
+}
+
+void updateGraph()
+{
+    // Propagate the shit
+    for (i = 0; i < GRAPH_PX_X-1; i++)
+    {
+        for (j = 0; j < GRAPH_PX_Y; j++)
+        {
+            graph[j][i] = graph[j][i+1];
+        }
+    }
 }
 
 void updateCurrentTempDisplay( float temp )
@@ -264,6 +296,7 @@ void loop()
     updatePIDLoop();
     updateRelayState();
     updatedutyCycle_msDisplay((dutyCycle_ms/relayCycle_ms)*100);
+    // updateGraph();
     updateDisplay();
     delay(50);
 }
