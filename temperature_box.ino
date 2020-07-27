@@ -11,6 +11,10 @@
 // For the PID loop
 #include <PID_v1.h>
 
+// For saving the PID settings.
+#include "EEPROMAnything.h"
+#include <EEPROM.h>
+
 // Constants
 #define CURRENT_TEMPERATURE_UPDATE_INTERVAL_MS 500
 
@@ -38,6 +42,9 @@
 #define EEPROM_PID_I 8
 #define EEPROM_PID_D 16
 
+// Check this often to see whether it's worth saving the settings to EEPROM.
+#define EEPROM_SAVE_INTERVAL_MS 10000
+
 MAX6675 thermocouple(PIN_TERMO_CLK, PIN_THERMO_CS, PIN_THERMO_D0);
 Encoder myEnc(PIN_ENC_A, PIN_ENC_B);
 
@@ -50,6 +57,7 @@ bool relayState; // 0 - Open circuit, 1 - Closed circuit
 // Times
 unsigned long lastCurrentTemperatureUpdate = 0;
 unsigned long lastRelayCycleTime = 0;
+unsigned long lastEEPROMSave = 0;
 unsigned long now = 0;
 
 // Misc
@@ -65,10 +73,16 @@ char blueText[BLUE_CHAR_N_Y][BLUE_CHAR_N_X+1];
 // https://playground.arduino.cc/Code/PIDLibrary/
 double pidInput, pidOutput, pidSetpoint;
 
-// double pidP = 2;
-double pidP = 100;
-double pidI = 5;
-double pidD = 1;
+#define DEFAULT_PID_P 2
+#define DEFAULT_PID_I 5
+#define DEFAULT_PID_D 1
+double pidP = DEFAULT_PID_P;
+double pidI = DEFAULT_PID_I;
+double pidD = DEFAULT_PID_D;
+
+double saved_pidP = 0;
+double saved_pidI = 0;
+double saved_pidD = 0;
 
 PID myPID(&pidInput, &pidOutput, &pidSetpoint, pidP, pidI, pidD, DIRECT);
 
@@ -84,6 +98,40 @@ unsigned int menuMode = 0;
 volatile bool btnA_falling = false;
 
 static unsigned char graph[GRAPH_PX_Y][GRAPH_PX_X];
+
+void savePID(unsigned char slot = 0)
+{
+    if (slot > 4) return;
+    if ((saved_pidP == pidP) &&
+        (saved_pidI == pidI) &&
+        (saved_pidD == pidD))
+    {
+        // No save is neccessary. Don't wear out the EEPROM.
+        Serial.println("Not necessary to save the PIDs, they haven't changed.");
+        return;
+    }
+    Serial.println("Writing PIDs to EEPROM");
+
+    EEPROM_writeAnything(slot+EEPROM_PID_P, pidP);
+    EEPROM_writeAnything(slot+EEPROM_PID_I, pidI);
+    EEPROM_writeAnything(slot+EEPROM_PID_D, pidD);
+    saved_pidP = pidP;
+    saved_pidI = pidI;
+    saved_pidD = pidD;
+    EEPROM.commit();
+}
+
+void loadPID(unsigned char slot = 0)
+{
+    if (slot > 4) return;
+    Serial.println("Loading PIDs from EEPROM.");
+    EEPROM_readAnything(slot+EEPROM_PID_P, pidP);
+    EEPROM_readAnything(slot+EEPROM_PID_I, pidI);
+    EEPROM_readAnything(slot+EEPROM_PID_D, pidD);
+    saved_pidP = pidP;
+    saved_pidI = pidI;
+    saved_pidD = pidD;
+}
 
 void updateDisplay()
 {
@@ -138,11 +186,13 @@ void setup()
     oled.init();
     oled.setFont(font8x8);
     oled.clearDisplay();
+    EEPROM.begin(512);
+    Serial.begin(9600);
+    delay(100);
+    Serial.println("Setup done");
+
     targetTemp = 100;
     lastCurrentTemperatureUpdate = 0;
-    // Serial.begin(9600);
-    // delay(100);
-    // Serial.println("Setup done");
     myPID.SetMode(AUTOMATIC);
     myPID.SetOutputLimits(0, relayCycle_ms);
 
@@ -156,6 +206,26 @@ void setup()
         for (j = 0; j < GRAPH_PX_Y; j++)
             graph[j][i] = 0xff;
 
+    lastEEPROMSave = millis();
+    loadPID();
+    if (isnan(pidP) || (pidP == 0))
+    {
+        // Assume the defaults in EEPROM are bad
+        Serial.println("Bad values in EEPROM, using defaults.");
+        pidP = DEFAULT_PID_P;
+        pidI = DEFAULT_PID_I;
+        pidD = DEFAULT_PID_D;
+        savePID();
+    }
+    myPID.SetTunings(pidP, pidI, pidD);
+}
+
+void updateSavedSettings()
+{
+    if ((millis() - lastEEPROMSave) < EEPROM_SAVE_INTERVAL_MS) return;
+    lastEEPROMSave = millis();
+    Serial.println("Saving settings to eeprom");
+    savePID();
 }
 
 void updateGraph()
@@ -298,5 +368,6 @@ void loop()
     updatedutyCycle_msDisplay((dutyCycle_ms/relayCycle_ms)*100);
     // updateGraph();
     updateDisplay();
+    updateSavedSettings();
     delay(50);
 }
